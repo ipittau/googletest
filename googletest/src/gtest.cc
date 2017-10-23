@@ -187,6 +187,8 @@ const char kStackTraceMarker[] = "\nStack trace:\n";
 // specified on the command line.
 bool g_help_flag = false;
 
+bool is_first_test = true;
+
 }  // namespace internal
 
 static const char* GetDefaultFilter() {
@@ -3462,7 +3464,15 @@ void XmlUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
   FilePath output_dir(output_file.RemoveFileName());
 
   if (output_dir.CreateDirectoriesRecursively()) {
-    xmlout = posix::FOpen(output_file_.c_str(), "w");
+    if(is_first_test)
+    {
+        xmlout = posix::FOpen(output_file_.c_str(), "w");
+    }
+    else
+    {
+        xmlout = posix::FOpen(output_file_.c_str(), "a");
+    }
+
   }
   if (xmlout == NULL) {
     // TODO(wan): report the reason of the failure.
@@ -3726,7 +3736,11 @@ void XmlUnitTestResultPrinter::PrintXmlUnitTest(std::ostream* stream,
                                                 const UnitTest& unit_test) {
   const std::string kTestsuites = "testsuites";
 
-  *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+  if(is_first_test) {
+      is_first_test = 0;
+      *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+
+
   *stream << "<" << kTestsuites;
 
   OutputXmlAttribute(stream, kTestsuites, "tests",
@@ -3752,12 +3766,17 @@ void XmlUnitTestResultPrinter::PrintXmlUnitTest(std::ostream* stream,
 
   OutputXmlAttribute(stream, kTestsuites, "name", "AllTests");
   *stream << ">\n";
+  }
 
   for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
     if (unit_test.GetTestCase(i)->reportable_test_count() > 0)
       PrintXmlTestCase(stream, *unit_test.GetTestCase(i));
   }
-  *stream << "</" << kTestsuites << ">\n";
+
+
+
+    //*stream << "</" << kTestsuites << ">\n";
+
 }
 
 // Produces a string representing the test properties in a result as space
