@@ -6,6 +6,10 @@ endif (POLICY CMP0048)
 
 project( googletest-distribution )
 
+set( THREADS_PTHREAD_ARG
+     "FAILED_TO_RUN"
+     CACHE STRING "Result from TRY_RUN" FORCE)
+
 enable_testing()
 
 include(CMakeDependentOption)
