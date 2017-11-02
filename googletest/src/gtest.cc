@@ -3375,6 +3375,141 @@ void TestEventRepeater::OnTestIterationEnd(const UnitTest& unit_test,
 
 // End TestEventRepeater
 
+
+class TestResultDB {
+
+public:
+
+  int test_property_count;
+  int total_part_count;
+
+  std::vector<TestProperty> test_properties;
+  std::vector<TestPartResult> test_parts;
+
+  TestResultDB() {}
+
+  void SaveTestResult(const TestResult& test_result) {
+
+    this->test_property_count = test_result.test_property_count();
+    this->total_part_count = test_result.total_part_count();
+
+    for (int i = 0; i < this->test_property_count; ++i) {
+      test_properties.push_back(test_result.GetTestProperty(i));
+    }
+
+    for (int i = 0; i < this->total_part_count; ++i) {
+      test_parts.push_back(test_result.GetTestPartResult(i));
+    }
+
+  }
+
+};
+
+class TestInfoDB {
+
+public:
+
+  TestInfoDB() {}
+
+  const char*  name;
+  const char*  value_param;
+  const char*  type_param;
+  bool should_run;
+  TimeInMillis elapsed_time;
+  const char* test_case_name;
+  bool is_reportable;
+  TestResultDB test_result;
+
+  void SaveTestInfo(const TestInfo& test_info) {
+
+    const TestResult& result = *test_info.result();
+    this->is_reportable = test_info.is_reportable();
+    this->name = test_info.name();
+    this->test_case_name = test_info.test_case_name();
+    this->value_param = test_info.value_param();
+    this->type_param = test_info.type_param();
+    this->should_run = test_info.should_run();
+    this->elapsed_time = result.elapsed_time();
+    this->test_result.SaveTestResult(result);
+
+  }
+
+};
+
+class TestCaseDB {
+
+public:
+
+  TestCaseDB() {}
+
+  const char *name;
+  int reportable_test_count;
+  int failed_test_count;
+  int reportable_disabled_test_count;
+  TimeInMillis elapsed_time;
+  int total_test_count;
+  TestResultDB test_result;
+  std::vector<TestInfoDB*> test_info;
+
+  void SaveTestCase(const TestCase& test_case) {
+
+    this->name = test_case.name();
+    this->reportable_test_count = test_case.reportable_test_count();
+    this->failed_test_count = test_case.failed_test_count();
+    this->reportable_disabled_test_count = test_case.reportable_disabled_test_count();
+    this->elapsed_time = test_case.elapsed_time();
+    this->test_result.SaveTestResult(test_case.ad_hoc_test_result());
+    this->total_test_count = test_case.total_test_count();
+
+    for (int i = 0; i < this->total_test_count; ++i) {
+      TestInfoDB *tmp = new TestInfoDB();
+      tmp->SaveTestInfo(*test_case.GetTestInfo(i));
+      test_info.push_back(tmp);
+    }
+
+  }
+
+  };
+
+
+class UnitTestDB {
+
+public:
+
+  UnitTestDB() {}
+
+  int reportable_test_count;
+  int failed_test_count;
+  int reportable_disabled_test_count;
+  TimeInMillis    start_timestamp;
+  TimeInMillis elapsed_time;
+  int random_seed;
+  int total_test_case_count;
+  TestResultDB test_result;
+  std::vector<TestCaseDB*> test_cases;
+
+  void SaveUnitTest(const UnitTest& unit_test) {
+
+    this->reportable_test_count = unit_test.reportable_test_count();
+    this->failed_test_count = unit_test.failed_test_count();
+    this->reportable_disabled_test_count = unit_test.reportable_disabled_test_count();
+    this->start_timestamp = unit_test.start_timestamp();
+    this->elapsed_time = unit_test.elapsed_time();
+    this->random_seed = unit_test.random_seed();
+    this->total_test_case_count = unit_test.total_test_case_count();
+    this->test_result.SaveTestResult(unit_test.ad_hoc_test_result());
+
+    for (int i = 0; i < this->total_test_case_count; ++i) {
+      TestCaseDB *tmp = new TestCaseDB();
+      tmp->SaveTestCase(*unit_test.GetTestCase(i));
+      test_cases.push_back(tmp);
+    }
+
+  }
+
+  };
+
+
 // This class generates an XML output file.
 class XmlUnitTestResultPrinter : public EmptyTestEventListener {
  public:
@@ -3428,13 +3563,27 @@ class XmlUnitTestResultPrinter : public EmptyTestEventListener {
                                 const char* test_case_name,
                                 const TestInfo& test_info);
 
+  void OutputXmlTestInfoDB(::std::ostream* stream,
+                           const TestInfoDB& test_info);
+
+
   // Prints an XML representation of a TestCase object
   static void PrintXmlTestCase(::std::ostream* stream,
                                const TestCase& test_case);
 
+  void PrintXmlTestCaseDB(std::ostream* stream,
+                               const TestCaseDB& test_case);
+
   // Prints an XML summary of unit_test to output stream out.
   static void PrintXmlUnitTest(::std::ostream* stream,
                                const UnitTest& unit_test);
+
+  void PrintXmlAllUnitTests(::std::ostream* stream,
+                               const UnitTest& unit_test);
+
+
+ std::string TestResultDBPropertiesAsXmlAttributes(
+      const TestResultDB& result);
 
   // Produces a string representing the test properties in a result as space
   // delimited XML attributes based on the property key="value" pairs.
@@ -3464,14 +3613,8 @@ void XmlUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
   FilePath output_dir(output_file.RemoveFileName());
 
   if (output_dir.CreateDirectoriesRecursively()) {
-    if(is_first_test)
-    {
+
         xmlout = posix::FOpen(output_file_.c_str(), "w");
-    }
-    else
-    {
-        xmlout = posix::FOpen(output_file_.c_str(), "a");
-    }
 
   }
   if (xmlout == NULL) {
@@ -3489,7 +3632,7 @@ void XmlUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
                       << output_file_ << "\"";
   }
   std::stringstream stream;
-  PrintXmlUnitTest(&stream, unit_test);
+  PrintXmlAllUnitTests(&stream, unit_test);
   fprintf(xmlout, "%s", StringStreamToString(&stream).c_str());
   fclose(xmlout);
 }
@@ -3655,6 +3798,59 @@ void XmlUnitTestResultPrinter::OutputXmlAttribute(
 
 // Prints an XML representation of a TestInfo object.
 // TODO(wan): There is also value in printing properties with the plain printer.
+
+void XmlUnitTestResultPrinter::OutputXmlTestInfoDB(::std::ostream* stream,
+                                                 const TestInfoDB& test_info) {
+  //const TestResult& result = *test_info.result();
+  const std::string kTestcase = "testcase";
+
+  *stream << "    <testcase";
+  OutputXmlAttribute(stream, kTestcase, "name", test_info.name);
+
+  if (test_info.value_param != NULL) {
+    OutputXmlAttribute(stream, kTestcase, "value_param",
+                       test_info.value_param);
+  }
+
+  if (test_info.type_param != NULL) {
+    OutputXmlAttribute(stream, kTestcase, "type_param", test_info.type_param);
+  }
+
+  OutputXmlAttribute(stream, kTestcase, "status",
+                     test_info.should_run ? "run" : "notrun");
+  OutputXmlAttribute(stream, kTestcase, "time",
+                     FormatTimeInMillisAsSeconds(test_info.elapsed_time));
+  OutputXmlAttribute(stream, kTestcase, "classname", test_info.test_case_name);
+  *stream << TestResultDBPropertiesAsXmlAttributes(test_info.test_result);
+
+
+  int failures = 0;
+  for (int i = 0; i < test_info.test_result.total_part_count; ++i) {
+    const TestPartResult part = test_info.test_result.test_parts.at(i);
+    if (part.failed()) {
+      if (++failures == 1) {
+        *stream << ">\n";
+      }
+      const std::string location =
+          internal::FormatCompilerIndependentFileLocation(part.file_name(),
+                                                          part.line_number());
+      const std::string summary = location + "\n" + part.summary();
+      *stream << "      <failure message=\""
+              << EscapeXmlAttribute(summary.c_str())
+              << "\" type=\"\">";
+      const std::string detail = location + "\n" + part.message();
+      OutputXmlCDataSection(stream, RemoveInvalidXmlCharacters(detail).c_str());
+      *stream << "</failure>\n";
+    }
+  }
+
+  if (failures == 0)
+    *stream << " />\n";
+  else
+    *stream << "    </testcase>\n";
+}
+
+
 void XmlUnitTestResultPrinter::OutputXmlTestInfo(::std::ostream* stream,
                                                  const char* test_case_name,
                                                  const TestInfo& test_info) {
@@ -3706,6 +3902,35 @@ void XmlUnitTestResultPrinter::OutputXmlTestInfo(::std::ostream* stream,
 }
 
 // Prints an XML representation of a TestCase object
+void XmlUnitTestResultPrinter::PrintXmlTestCaseDB(std::ostream* stream,
+                                                const TestCaseDB& test_case) {
+  const std::string kTestsuite = "testsuite";
+  *stream << "  <" << kTestsuite;
+  OutputXmlAttribute(stream, kTestsuite, "name", test_case.name);
+  OutputXmlAttribute(stream, kTestsuite, "tests",
+                     StreamableToString(test_case.reportable_test_count));
+  OutputXmlAttribute(stream, kTestsuite, "failures",
+                     StreamableToString(test_case.failed_test_count));
+  OutputXmlAttribute(
+      stream, kTestsuite, "disabled",
+      StreamableToString(test_case.reportable_disabled_test_count));
+  OutputXmlAttribute(stream, kTestsuite, "errors", "0");
+  OutputXmlAttribute(stream, kTestsuite, "time",
+                     FormatTimeInMillisAsSeconds(test_case.elapsed_time));
+
+  *stream << TestResultDBPropertiesAsXmlAttributes(test_case.test_result) << ">\n";
+
+  for (int i = 0; i < test_case.total_test_count; ++i) {
+    TestInfoDB *ti = new TestInfoDB();
+    ti = test_case.test_info.at(i);
+    if (ti->is_reportable)
+      OutputXmlTestInfoDB(stream, *ti);
+      //*stream << "Test is Reportable!" << ">\n";
+  }
+  *stream << "  </" << kTestsuite << ">\n";
+}
+
+// Prints an XML representation of a TestCase object
 void XmlUnitTestResultPrinter::PrintXmlTestCase(std::ostream* stream,
                                                 const TestCase& test_case) {
   const std::string kTestsuite = "testsuite";
@@ -3736,8 +3961,6 @@ void XmlUnitTestResultPrinter::PrintXmlUnitTest(std::ostream* stream,
                                                 const UnitTest& unit_test) {
   const std::string kTestsuites = "testsuites";
 
-  if(is_first_test) {
-      is_first_test = 0;
       *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
 
@@ -3766,7 +3989,7 @@ void XmlUnitTestResultPrinter::PrintXmlUnitTest(std::ostream* stream,
 
   OutputXmlAttribute(stream, kTestsuites, "name", "AllTests");
   *stream << ">\n";
-  }
+
 
   for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
     if (unit_test.GetTestCase(i)->reportable_test_count() > 0)
@@ -3774,8 +3997,82 @@ void XmlUnitTestResultPrinter::PrintXmlUnitTest(std::ostream* stream,
   }
 
 
-
     //*stream << "</" << kTestsuites << ">\n";
+
+}
+
+
+std::string XmlUnitTestResultPrinter::TestResultDBPropertiesAsXmlAttributes(
+    const TestResultDB& result) {
+
+  Message attributes;
+  for (int i = 0; i < result.test_property_count; ++i) {
+    const TestProperty& property = result.test_properties.at(i);
+    attributes << " " << property.key() << "="
+        << "\"" << EscapeXmlAttribute(property.value()) << "\"";
+
+  }
+
+  return attributes.GetString();
+
+}
+
+
+void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
+                                                const UnitTest& unit_test) {
+
+  UnitTestDB *u = new UnitTestDB();
+  u->SaveUnitTest(unit_test);
+
+  static std::vector<UnitTestDB*> unit_tests;
+  unit_tests.push_back(u);
+
+  //Printing section (should be improved in order to correctly print the total counters)
+
+  const std::string kTestsuites = "testsuites";
+
+  *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+
+  *stream << "<" << kTestsuites;
+
+  OutputXmlAttribute(stream, kTestsuites, "tests",
+                     StreamableToString(unit_test.reportable_test_count()));
+  OutputXmlAttribute(stream, kTestsuites, "failures",
+                     StreamableToString(unit_test.failed_test_count()));
+  OutputXmlAttribute(
+      stream, kTestsuites, "disabled",
+      StreamableToString(unit_test.reportable_disabled_test_count()));
+  OutputXmlAttribute(stream, kTestsuites, "errors", "0");
+  OutputXmlAttribute(
+      stream, kTestsuites, "timestamp",
+      FormatEpochTimeInMillisAsIso8601(unit_test.start_timestamp()));
+  OutputXmlAttribute(stream, kTestsuites, "time",
+                     FormatTimeInMillisAsSeconds(unit_test.elapsed_time()));
+
+  if (GTEST_FLAG(shuffle)) {
+    OutputXmlAttribute(stream, kTestsuites, "random_seed",
+                       StreamableToString(unit_test.random_seed()));
+  }
+
+  *stream << TestPropertiesAsXmlAttributes(unit_test.ad_hoc_test_result());
+
+  OutputXmlAttribute(stream, kTestsuites, "name", "AllTests");
+  *stream << ">\n";
+
+  std::vector<UnitTestDB*>::iterator it;
+
+     for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
+         for (int i = 0; i < (**it).total_test_case_count; ++i) {
+           TestCaseDB *tc = new TestCaseDB();
+           tc = (**it).test_cases.at(i);
+           if (tc->reportable_test_count > 0) {
+             PrintXmlTestCaseDB(stream, *tc);
+              }
+           }
+
+     }
+
+    *stream << "</" << kTestsuites << ">\n";
 
 }
 
