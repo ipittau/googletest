@@ -4030,24 +4030,42 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   //Printing section (should be improved in order to correctly print the total counters)
 
   const std::string kTestsuites = "testsuites";
+  std::vector<UnitTestDB*>::iterator it;
+  static int reportable_test_count_acc, failed_test_count_acc, reportable_disabled_test_count_acc = 0;
+  static TimeInMillis start_timestamp, elapsed_time_acc = 0;
 
   *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
   *stream << "<" << kTestsuites;
 
+  reportable_test_count_acc = 0;
+  failed_test_count_acc = 0;
+  reportable_disabled_test_count_acc = 0;
+  start_timestamp = 0;
+  elapsed_time_acc = 0;
+
+   for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
+     reportable_test_count_acc += (**it).reportable_test_count;
+     failed_test_count_acc += (**it).failed_test_count;
+     reportable_disabled_test_count_acc += (**it).reportable_disabled_test_count;
+     if(it==unit_tests.begin()) start_timestamp = (**it).start_timestamp;
+     elapsed_time_acc += (**it).elapsed_time;
+
+     }
+
   OutputXmlAttribute(stream, kTestsuites, "tests",
-                     StreamableToString(unit_test.reportable_test_count()));
+                     StreamableToString(reportable_test_count_acc));
   OutputXmlAttribute(stream, kTestsuites, "failures",
-                     StreamableToString(unit_test.failed_test_count()));
+                     StreamableToString(failed_test_count_acc));
   OutputXmlAttribute(
       stream, kTestsuites, "disabled",
-      StreamableToString(unit_test.reportable_disabled_test_count()));
+      StreamableToString(reportable_disabled_test_count_acc));
   OutputXmlAttribute(stream, kTestsuites, "errors", "0");
   OutputXmlAttribute(
       stream, kTestsuites, "timestamp",
-      FormatEpochTimeInMillisAsIso8601(unit_test.start_timestamp()));
+      FormatEpochTimeInMillisAsIso8601(start_timestamp));
   OutputXmlAttribute(stream, kTestsuites, "time",
-                     FormatTimeInMillisAsSeconds(unit_test.elapsed_time()));
+                     FormatTimeInMillisAsSeconds(elapsed_time_acc));
 
   if (GTEST_FLAG(shuffle)) {
     OutputXmlAttribute(stream, kTestsuites, "random_seed",
@@ -4059,7 +4077,6 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   OutputXmlAttribute(stream, kTestsuites, "name", "AllTests");
   *stream << ">\n";
 
-  std::vector<UnitTestDB*>::iterator it;
 
      for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
          for (int i = 0; i < (**it).total_test_case_count; ++i) {
