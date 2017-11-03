@@ -3375,7 +3375,7 @@ void TestEventRepeater::OnTestIterationEnd(const UnitTest& unit_test,
 
 // End TestEventRepeater
 
-
+//Result
 class TestResultDB {
 
 public:
@@ -3405,6 +3405,8 @@ public:
 
 };
 
+
+//TestPar -- FAILURE
 class TestInfoDB {
 
 public:
@@ -3436,6 +3438,7 @@ public:
 
 };
 
+//TestSuite ---
 class TestCaseDB {
 
 public:
@@ -3451,7 +3454,9 @@ public:
   TestResultDB test_result;
   std::vector<TestInfoDB*> test_info;
 
-  void SaveTestCase(const TestCase& test_case) {
+
+  void SaveTestCase(const TestCase& test_case)
+  {
 
     this->name = test_case.name();
     this->reportable_test_count = test_case.reportable_test_count();
@@ -3472,11 +3477,12 @@ public:
   };
 
 
+//TestSuites
 class UnitTestDB {
 
 public:
 
-  UnitTestDB() {}
+  UnitTestDB() { }
 
   int reportable_test_count;
   int failed_test_count;
@@ -3486,28 +3492,40 @@ public:
   int random_seed;
   int total_test_case_count;
   TestResultDB test_result;
-  std::vector<TestCaseDB*> test_cases;
+  std::map<std::string, TestCaseDB*> test_cases_map;
 
-  void SaveUnitTest(const UnitTest& unit_test) {
+  void AddUnitTest(const UnitTest& unit_test) {
 
-    this->reportable_test_count = unit_test.reportable_test_count();
-    this->failed_test_count = unit_test.failed_test_count();
-    this->reportable_disabled_test_count = unit_test.reportable_disabled_test_count();
+    this->reportable_test_count += unit_test.reportable_test_count();
+    this->failed_test_count += unit_test.failed_test_count();
+    this->reportable_disabled_test_count += unit_test.reportable_disabled_test_count();
     this->start_timestamp = unit_test.start_timestamp();
     this->elapsed_time = unit_test.elapsed_time();
-    this->random_seed = unit_test.random_seed();
-    this->total_test_case_count = unit_test.total_test_case_count();
+    this->random_seed += unit_test.random_seed();
+    this->total_test_case_count += unit_test.total_test_case_count();
     this->test_result.SaveTestResult(unit_test.ad_hoc_test_result());
 
-    for (int i = 0; i < this->total_test_case_count; ++i) {
-      TestCaseDB *tmp = new TestCaseDB();
-      tmp->SaveTestCase(*unit_test.GetTestCase(i));
-      test_cases.push_back(tmp);
-    }
 
+
+    for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
+        const TestCase *tc = unit_test.GetTestCase(i);
+        if (test_cases_map.count(tc->name()) == 0)
+          {
+            //element not present
+            TestCaseDB *tmp = new TestCaseDB();
+            tmp->SaveTestCase(*unit_test.GetTestCase(i));
+            test_cases_map.insert(std::make_pair(tc->name(), tmp));
+          }
+        else
+          {
+            //element present
+            TestCaseDB *tc_map = test_cases_map.at(tc->name());
+            tc_map->SaveTestCase(*unit_test.GetTestCase(i));
+          }
+      }
   }
 
-  };
+};
 
 
 // This class generates an XML output file.
@@ -3921,8 +3939,7 @@ void XmlUnitTestResultPrinter::PrintXmlTestCaseDB(std::ostream* stream,
   *stream << TestResultDBPropertiesAsXmlAttributes(test_case.test_result) << ">\n";
 
   for (int i = 0; i < test_case.total_test_count; ++i) {
-    TestInfoDB *ti = new TestInfoDB();
-    ti = test_case.test_info.at(i);
+    TestInfoDB *ti = test_case.test_info.at(i);
     if (ti->is_reportable)
       OutputXmlTestInfoDB(stream, *ti);
       //*stream << "Test is Reportable!" << ">\n";
@@ -4021,51 +4038,54 @@ std::string XmlUnitTestResultPrinter::TestResultDBPropertiesAsXmlAttributes(
 void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
                                                 const UnitTest& unit_test) {
 
-  UnitTestDB *u = new UnitTestDB();
-  u->SaveUnitTest(unit_test);
+  static UnitTestDB s_unit_tests;
 
-  static std::vector<UnitTestDB*> unit_tests;
-  unit_tests.push_back(u);
+  std::cout << "adding "  << std::endl;
+  //UnitTestDB *u = new UnitTestDB();
+  s_unit_tests.AddUnitTest(unit_test);
+
+  //collection of test_suites each element is a test suite
+  //static std::map<std::string, UnitTestDB*> unit_tests;
+  //unit_tests.push_back(u);
 
   //Printing section (should be improved in order to correctly print the total counters)
 
   const std::string kTestsuites = "testsuites";
-  std::vector<UnitTestDB*>::iterator it;
-  static int reportable_test_count_acc, failed_test_count_acc, reportable_disabled_test_count_acc = 0;
-  static TimeInMillis start_timestamp, elapsed_time_acc = 0;
+//  std::vector<UnitTestDB*>::iterator it;
+//  static int reportable_test_count_acc, failed_test_count_acc, reportable_disabled_test_count_acc = 0;
+//  static TimeInMillis start_timestamp, elapsed_time_acc = 0;
 
   *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
   *stream << "<" << kTestsuites;
 
-  reportable_test_count_acc = 0;
-  failed_test_count_acc = 0;
-  reportable_disabled_test_count_acc = 0;
-  start_timestamp = 0;
-  elapsed_time_acc = 0;
+//  reportable_test_count_acc = 0;
+//  failed_test_count_acc = 0;
+//  reportable_disabled_test_count_acc = 0;
+//  start_timestamp = 0;
+//  elapsed_time_acc = 0;
 
-   for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
-     reportable_test_count_acc += (**it).reportable_test_count;
-     failed_test_count_acc += (**it).failed_test_count;
-     reportable_disabled_test_count_acc += (**it).reportable_disabled_test_count;
-     if(it==unit_tests.begin()) start_timestamp = (**it).start_timestamp;
-     elapsed_time_acc += (**it).elapsed_time;
-
-     }
+//  for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
+//      reportable_test_count_acc += (**it).reportable_test_count;
+//      failed_test_count_acc += (**it).failed_test_count;
+//      reportable_disabled_test_count_acc += (**it).reportable_disabled_test_count;
+//      if(it==unit_tests.begin()) start_timestamp = (**it).start_timestamp;
+//      elapsed_time_acc += (**it).elapsed_time;
+//    }
 
   OutputXmlAttribute(stream, kTestsuites, "tests",
-                     StreamableToString(reportable_test_count_acc));
+                     StreamableToString(s_unit_tests.reportable_test_count));
   OutputXmlAttribute(stream, kTestsuites, "failures",
-                     StreamableToString(failed_test_count_acc));
+                     StreamableToString(s_unit_tests.failed_test_count));
   OutputXmlAttribute(
-      stream, kTestsuites, "disabled",
-      StreamableToString(reportable_disabled_test_count_acc));
+        stream, kTestsuites, "disabled",
+        StreamableToString(s_unit_tests.reportable_disabled_test_count));
   OutputXmlAttribute(stream, kTestsuites, "errors", "0");
   OutputXmlAttribute(
-      stream, kTestsuites, "timestamp",
-      FormatEpochTimeInMillisAsIso8601(start_timestamp));
+        stream, kTestsuites, "timestamp",
+        FormatEpochTimeInMillisAsIso8601(s_unit_tests.start_timestamp));
   OutputXmlAttribute(stream, kTestsuites, "time",
-                     FormatTimeInMillisAsSeconds(elapsed_time_acc));
+                     FormatTimeInMillisAsSeconds(s_unit_tests.elapsed_time));
 
   if (GTEST_FLAG(shuffle)) {
     OutputXmlAttribute(stream, kTestsuites, "random_seed",
@@ -4078,16 +4098,18 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   *stream << ">\n";
 
 
-     for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
-         for (int i = 0; i < (**it).total_test_case_count; ++i) {
-           TestCaseDB *tc = new TestCaseDB();
-           tc = (**it).test_cases.at(i);
-           if (tc->reportable_test_count > 0) {
-             PrintXmlTestCaseDB(stream, *tc);
-              }
-           }
+  //std::cout << "size is " << s_unit_tests.test_cases.size() << std::endl;
+     //for (it = s_.begin(); it != unit_tests.end(); ++it) {
 
-     }
+  for (std::map<std::string, TestCaseDB*>::iterator it = s_unit_tests.test_cases_map.begin(); it != s_unit_tests.test_cases_map.end(); ++it) {
+      std::cout << it->first << ", " << it->second << '\n';
+      TestCaseDB *tc = (TestCaseDB*) it->second;
+      if (tc->reportable_test_count > 0) {
+        PrintXmlTestCaseDB(stream, *tc);
+         }
+      }
+    }
+//}
 
     *stream << "</" << kTestsuites << ">\n";
 
