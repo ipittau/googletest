@@ -3406,56 +3406,55 @@ public:
 };
 
 
-//TestPar -- FAILURE
-class TestInfoDB {
-
-public:
-
-  TestInfoDB() {}
-
-  const char*  name;
-  const char*  value_param;
-  const char*  type_param;
-  bool should_run;
-  TimeInMillis elapsed_time;
-  const char* test_case_name;
-  bool is_reportable;
-  TestResultDB test_result;
-
-  void SaveTestInfo(const TestInfo& test_info) {
-
-    const TestResult& result = *test_info.result();
-    this->is_reportable = test_info.is_reportable();
-    this->name = test_info.name();
-    this->test_case_name = test_info.test_case_name();
-    this->value_param = test_info.value_param();
-    this->type_param = test_info.type_param();
-    this->should_run = test_info.should_run();
-    this->elapsed_time = result.elapsed_time();
-    this->test_result.SaveTestResult(result);
-
-  }
-
-};
-
-//TestSuite ---
+//TestCase -- FAILURE
 class TestCaseDB {
 
 public:
 
   TestCaseDB() {}
 
-  const char *name;
+  std::string  name;
+  std::string  value_param;
+  std::string  type_param;
+  bool should_run;
+  TimeInMillis elapsed_time;
+  std::string test_case_name;
+  bool is_reportable;
+  TestResultDB test_result;
+
+  void AddTestCase(const TestInfo& test_info) {
+
+    const TestResult& result = *test_info.result();
+    this->is_reportable = test_info.is_reportable();
+    this->name = test_info.name();
+    this->test_case_name = test_info.test_case_name();
+    this->value_param = test_info.value_param()==NULL ? "" : test_info.value_param() ;
+    this->type_param = test_info.type_param()==NULL ? "" : test_info.type_param() ;
+    this->should_run = test_info.should_run();
+    this->elapsed_time = result.elapsed_time();
+    this->test_result.SaveTestResult(result);
+  }
+
+};
+
+//TestSuite ---
+class TestSuiteDB {
+
+public:
+
+  TestSuiteDB() {}
+
+  std::string name;
   int reportable_test_count;
   int failed_test_count;
   int reportable_disabled_test_count;
   TimeInMillis elapsed_time;
   int total_test_count;
   TestResultDB test_result;
-  std::vector<TestInfoDB*> test_info;
+  std::vector<TestCaseDB> test_info;
 
 
-  void SaveTestCase(const TestCase& test_case)
+  void AddTestSuite(const TestCase& test_case)
   {
     this->name = test_case.name();
     this->reportable_test_count += test_case.reportable_test_count();
@@ -3465,23 +3464,25 @@ public:
     this->test_result.SaveTestResult(test_case.ad_hoc_test_result());
     this->total_test_count += test_case.total_test_count();
 
-    for (int i = 0; i < test_case.total_test_count(); ++i) {
-      TestInfoDB *tmp = new TestInfoDB();
-      tmp->SaveTestInfo(*test_case.GetTestInfo(i));
-      test_info.push_back(tmp);
-    }
+    std::cout << "debug: " << test_case.name() << " report: " << test_case.reportable_test_count()<<std::endl;;
 
+    for (int i = 0; i < test_case.total_test_count(); ++i) {
+      TestCaseDB tmp;
+      tmp.AddTestCase(*test_case.GetTestInfo(i));
+      test_info.push_back(tmp);
+      std::cout << "insert: " << tmp.name << " report: " << tmp.is_reportable << std::endl;
+    }
   }
 
   };
 
 
 //TestSuites
-class UnitTestDB {
+class TestSuitesDB {
 
 public:
 
-  UnitTestDB() { }
+  TestSuitesDB() { }
 
   int reportable_test_count;
   int failed_test_count;
@@ -3491,9 +3492,9 @@ public:
   int random_seed;
   int total_test_case_count;
   TestResultDB test_result;
-  std::map<std::string, TestCaseDB*> test_cases_map;
+  std::map<std::string, TestSuiteDB> test_cases_map;
 
-  void AddUnitTest(const UnitTest& unit_test) {
+  void AddTestSuites(const UnitTest& unit_test) {
 
     this->reportable_test_count += unit_test.reportable_test_count();
     this->failed_test_count += unit_test.failed_test_count();
@@ -3502,26 +3503,28 @@ public:
     this->elapsed_time = unit_test.elapsed_time();
     this->random_seed += unit_test.random_seed();
     this->test_result.SaveTestResult(unit_test.ad_hoc_test_result());
-
-
+    this->total_test_case_count += unit_test.total_test_case_count();
 
     for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
-        const TestCase *tc = unit_test.GetTestCase(i);
-        if (test_cases_map.count(tc->name()) == 0)
-          {
-            //element not present
-            TestCaseDB *tmp = new TestCaseDB();
-            tmp->SaveTestCase(*unit_test.GetTestCase(i));
-            test_cases_map.insert(std::make_pair(tc->name(), tmp));
-            this->total_test_case_count++;
-          }
-        else
-          {
-            //element present
-            TestCaseDB *tc_map = test_cases_map.at(tc->name());
-            tc_map->SaveTestCase(*unit_test.GetTestCase(i));
-          }
+      const TestCase *tc = unit_test.GetTestCase(i);
+
+      std::cout << "looking for: " << tc->name() << std::endl;
+      if (test_cases_map.count(tc->name()) == 0)
+      {
+        //element not present
+        std::cout << "not found" << std::endl;
+        TestSuiteDB tmp;// = new TestCaseDB();
+        tmp.AddTestSuite(*unit_test.GetTestCase(i));
+        test_cases_map.insert(std::make_pair(tc->name(), tmp));
+        this->total_test_case_count++;
       }
+      else
+      {
+        //element present
+        TestSuiteDB &tc_map = test_cases_map.at(tc->name());
+        tc_map.AddTestSuite(*unit_test.GetTestCase(i));
+      }
+    }
   }
 
 };
@@ -3581,7 +3584,7 @@ class XmlUnitTestResultPrinter : public EmptyTestEventListener {
                                 const TestInfo& test_info);
 
   void OutputXmlTestInfoDB(::std::ostream* stream,
-                           const TestInfoDB& test_info);
+                           const TestCaseDB& test_info);
 
 
   // Prints an XML representation of a TestCase object
@@ -3589,7 +3592,7 @@ class XmlUnitTestResultPrinter : public EmptyTestEventListener {
                                const TestCase& test_case);
 
   void PrintXmlTestCaseDB(std::ostream* stream,
-                               const TestCaseDB& test_case);
+                               const TestSuiteDB& test_case);
 
   // Prints an XML summary of unit_test to output stream out.
   static void PrintXmlUnitTest(::std::ostream* stream,
@@ -3817,27 +3820,27 @@ void XmlUnitTestResultPrinter::OutputXmlAttribute(
 // TODO(wan): There is also value in printing properties with the plain printer.
 
 void XmlUnitTestResultPrinter::OutputXmlTestInfoDB(::std::ostream* stream,
-                                                 const TestInfoDB& test_info) {
+                                                 const TestCaseDB& test_info) {
   //const TestResult& result = *test_info.result();
   const std::string kTestcase = "testcase";
 
   *stream << "    <testcase";
-  OutputXmlAttribute(stream, kTestcase, "name", test_info.name);
+  OutputXmlAttribute(stream, kTestcase, "name", test_info.name.c_str());
 
-  if (test_info.value_param != NULL) {
+  if (test_info.value_param.empty() == false) {
     OutputXmlAttribute(stream, kTestcase, "value_param",
-                       test_info.value_param);
+                       test_info.value_param.c_str());
   }
 
-  if (test_info.type_param != NULL) {
-    OutputXmlAttribute(stream, kTestcase, "type_param", test_info.type_param);
+  if (test_info.type_param.empty() == false) {
+    OutputXmlAttribute(stream, kTestcase, "type_param", test_info.type_param.c_str());
   }
 
   OutputXmlAttribute(stream, kTestcase, "status",
                      test_info.should_run ? "run" : "notrun");
   OutputXmlAttribute(stream, kTestcase, "time",
                      FormatTimeInMillisAsSeconds(test_info.elapsed_time));
-  OutputXmlAttribute(stream, kTestcase, "classname", test_info.test_case_name);
+  OutputXmlAttribute(stream, kTestcase, "classname", test_info.test_case_name.c_str());
   *stream << TestResultDBPropertiesAsXmlAttributes(test_info.test_result);
 
 
@@ -3920,7 +3923,7 @@ void XmlUnitTestResultPrinter::OutputXmlTestInfo(::std::ostream* stream,
 
 // Prints an XML representation of a TestCase object
 void XmlUnitTestResultPrinter::PrintXmlTestCaseDB(std::ostream* stream,
-                                                const TestCaseDB& test_case) {
+                                                const TestSuiteDB& test_case) {
   const std::string kTestsuite = "testsuite";
   *stream << "  <" << kTestsuite;
   OutputXmlAttribute(stream, kTestsuite, "name", test_case.name);
@@ -3937,11 +3940,10 @@ void XmlUnitTestResultPrinter::PrintXmlTestCaseDB(std::ostream* stream,
 
   *stream << TestResultDBPropertiesAsXmlAttributes(test_case.test_result) << ">\n";
 
-  for (int i = 0; i < test_case.total_test_count; ++i) {
-    TestInfoDB *ti = test_case.test_info.at(i);
-    if (ti->is_reportable)
-      OutputXmlTestInfoDB(stream, *ti);
-      //*stream << "Test is Reportable!" << ">\n";
+  for (unsigned int i = 0; i < test_case.test_info.size(); ++i) {
+    TestCaseDB ti = test_case.test_info.at(i);
+    if (ti.is_reportable)
+      OutputXmlTestInfoDB(stream, ti);
   }
   *stream << "  </" << kTestsuite << ">\n";
 }
@@ -4035,13 +4037,10 @@ std::string XmlUnitTestResultPrinter::TestResultDBPropertiesAsXmlAttributes(
 
 
 void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
-                                                const UnitTest& unit_test) {
+                                                    const UnitTest& unit_test) {
 
-  static UnitTestDB s_unit_tests;
-
-  std::cout << "adding "  << std::endl;
-
-  s_unit_tests.AddUnitTest(unit_test);
+  static TestSuitesDB s_unit_tests;
+  s_unit_tests.AddTestSuites(unit_test);
 
   //Printing section (should be improved in order to correctly print the total counters)
   const std::string kTestsuites = "testsuites";
@@ -4073,16 +4072,19 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   OutputXmlAttribute(stream, kTestsuites, "name", "AllTests");
   *stream << ">\n";
 
+  for (std::map<std::string, TestSuiteDB>::iterator it = s_unit_tests.test_cases_map.begin(); it != s_unit_tests.test_cases_map.end(); ++it) {
+    //std::cout << it->first << ", " << it->second << '\n';
+    TestSuiteDB &tc = (TestSuiteDB&) it->second;
+    if (tc.reportable_test_count > 0) {
+      PrintXmlTestCaseDB(stream, tc);
+    }
+    else
+    {
+      std::cout << "no reportable: " << tc.name << std::endl;
+    }
+  }
 
-  for (std::map<std::string, TestCaseDB*>::iterator it = s_unit_tests.test_cases_map.begin(); it != s_unit_tests.test_cases_map.end(); ++it) {
-      std::cout << it->first << ", " << it->second << '\n';
-      TestCaseDB *tc = (TestCaseDB*) it->second;
-      if (tc->reportable_test_count > 0) {
-        PrintXmlTestCaseDB(stream, *tc);
-         }
-      }
-
-    *stream << "</" << kTestsuites << ">\n";
+  *stream << "</" << kTestsuites << ">\n";
 }
 
 // Produces a string representing the test properties in a result as space
