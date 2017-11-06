@@ -3379,6 +3379,14 @@ void TestEventRepeater::OnTestIterationEnd(const UnitTest& unit_test,
 class TestResultDB {
 
 public:
+  TestResultDB() :
+    test_property_count(0),
+    total_part_count(0),
+    test_properties(),
+    test_parts()
+
+
+  {}
 
   int test_property_count;
   int total_part_count;
@@ -3386,7 +3394,7 @@ public:
   std::vector<TestProperty> test_properties;
   std::vector<TestPartResult> test_parts;
 
-  TestResultDB() {}
+
 
   void SaveTestResult(const TestResult& test_result) {
 
@@ -3411,7 +3419,17 @@ class TestCaseDB {
 
 public:
 
-  TestCaseDB() {}
+  TestCaseDB() :
+    name(""),
+    value_param(""),
+    type_param(""),
+    should_run(false),
+    elapsed_time(0),
+    test_case_name(""),
+    is_reportable(false),
+    test_result()
+  {}
+
 
   std::string  name;
   std::string  value_param;
@@ -3442,7 +3460,16 @@ class TestSuiteDB {
 
 public:
 
-  TestSuiteDB() {}
+  TestSuiteDB():
+    name(""),
+    reportable_test_count(0),
+    failed_test_count(0),
+    reportable_disabled_test_count(0),
+    elapsed_time(0),
+    total_test_count(0),
+    test_result(),
+    test_info()
+  {}
 
   std::string name;
   int reportable_test_count;
@@ -3474,7 +3501,7 @@ public:
     }
   }
 
-  };
+};
 
 
 //TestSuites
@@ -3482,12 +3509,22 @@ class TestSuitesDB {
 
 public:
 
-  TestSuitesDB() { }
+  TestSuitesDB():
+    reportable_test_count(0),
+    failed_test_count(0),
+    reportable_disabled_test_count(0),
+    start_timestamp(0),
+    elapsed_time(0),
+    random_seed(0),
+    total_test_case_count(0),
+    test_result(),
+    test_cases_map()
+  {}
 
   int reportable_test_count;
   int failed_test_count;
   int reportable_disabled_test_count;
-  TimeInMillis    start_timestamp;
+  TimeInMillis start_timestamp;
   TimeInMillis elapsed_time;
   int random_seed;
   int total_test_case_count;
@@ -3499,11 +3536,10 @@ public:
     this->reportable_test_count += unit_test.reportable_test_count();
     this->failed_test_count += unit_test.failed_test_count();
     this->reportable_disabled_test_count += unit_test.reportable_disabled_test_count();
-    this->start_timestamp = unit_test.start_timestamp();
+    this->start_timestamp = start_timestamp==0?unit_test.start_timestamp():start_timestamp;
     this->elapsed_time = unit_test.elapsed_time();
     this->random_seed += unit_test.random_seed();
     this->test_result.SaveTestResult(unit_test.ad_hoc_test_result());
-    this->total_test_case_count += unit_test.total_test_case_count();
 
     for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
       const TestCase *tc = unit_test.GetTestCase(i);
@@ -3513,9 +3549,10 @@ public:
       {
         //element not present
         std::cout << "not found" << std::endl;
-        TestSuiteDB tmp;// = new TestCaseDB();
-        tmp.AddTestSuite(*unit_test.GetTestCase(i));
+        TestSuiteDB tmp;
+        tmp.AddTestSuite(*tc);
         test_cases_map.insert(std::make_pair(tc->name(), tmp));
+
         this->total_test_case_count++;
       }
       else
