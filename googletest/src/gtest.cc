@@ -3457,16 +3457,15 @@ public:
 
   void SaveTestCase(const TestCase& test_case)
   {
-
     this->name = test_case.name();
-    this->reportable_test_count = test_case.reportable_test_count();
-    this->failed_test_count = test_case.failed_test_count();
-    this->reportable_disabled_test_count = test_case.reportable_disabled_test_count();
-    this->elapsed_time = test_case.elapsed_time();
+    this->reportable_test_count += test_case.reportable_test_count();
+    this->failed_test_count += test_case.failed_test_count();
+    this->reportable_disabled_test_count += test_case.reportable_disabled_test_count();
+    this->elapsed_time += test_case.elapsed_time();
     this->test_result.SaveTestResult(test_case.ad_hoc_test_result());
-    this->total_test_count = test_case.total_test_count();
+    this->total_test_count += test_case.total_test_count();
 
-    for (int i = 0; i < this->total_test_count; ++i) {
+    for (int i = 0; i < test_case.total_test_count(); ++i) {
       TestInfoDB *tmp = new TestInfoDB();
       tmp->SaveTestInfo(*test_case.GetTestInfo(i));
       test_info.push_back(tmp);
@@ -3515,12 +3514,14 @@ public:
             TestCaseDB *tmp = new TestCaseDB();
             tmp->SaveTestCase(*unit_test.GetTestCase(i));
             test_cases_map.insert(std::make_pair(tc->name(), tmp));
+            std::cout << "Not found"<< std::endl;
           }
         else
           {
             //element present
             TestCaseDB *tc_map = test_cases_map.at(tc->name());
             tc_map->SaveTestCase(*unit_test.GetTestCase(i));
+            std::cout << "Found"<< std::endl;
           }
       }
   }
@@ -4041,37 +4042,14 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   static UnitTestDB s_unit_tests;
 
   std::cout << "adding "  << std::endl;
-  //UnitTestDB *u = new UnitTestDB();
+
   s_unit_tests.AddUnitTest(unit_test);
 
-  //collection of test_suites each element is a test suite
-  //static std::map<std::string, UnitTestDB*> unit_tests;
-  //unit_tests.push_back(u);
-
   //Printing section (should be improved in order to correctly print the total counters)
-
   const std::string kTestsuites = "testsuites";
-//  std::vector<UnitTestDB*>::iterator it;
-//  static int reportable_test_count_acc, failed_test_count_acc, reportable_disabled_test_count_acc = 0;
-//  static TimeInMillis start_timestamp, elapsed_time_acc = 0;
-
   *stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
   *stream << "<" << kTestsuites;
-
-//  reportable_test_count_acc = 0;
-//  failed_test_count_acc = 0;
-//  reportable_disabled_test_count_acc = 0;
-//  start_timestamp = 0;
-//  elapsed_time_acc = 0;
-
-//  for (it = unit_tests.begin(); it != unit_tests.end(); ++it) {
-//      reportable_test_count_acc += (**it).reportable_test_count;
-//      failed_test_count_acc += (**it).failed_test_count;
-//      reportable_disabled_test_count_acc += (**it).reportable_disabled_test_count;
-//      if(it==unit_tests.begin()) start_timestamp = (**it).start_timestamp;
-//      elapsed_time_acc += (**it).elapsed_time;
-//    }
 
   OutputXmlAttribute(stream, kTestsuites, "tests",
                      StreamableToString(s_unit_tests.reportable_test_count));
@@ -4098,9 +4076,6 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
   *stream << ">\n";
 
 
-  //std::cout << "size is " << s_unit_tests.test_cases.size() << std::endl;
-     //for (it = s_.begin(); it != unit_tests.end(); ++it) {
-
   for (std::map<std::string, TestCaseDB*>::iterator it = s_unit_tests.test_cases_map.begin(); it != s_unit_tests.test_cases_map.end(); ++it) {
       std::cout << it->first << ", " << it->second << '\n';
       TestCaseDB *tc = (TestCaseDB*) it->second;
@@ -4108,11 +4083,8 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
         PrintXmlTestCaseDB(stream, *tc);
          }
       }
-    }
-//}
 
     *stream << "</" << kTestsuites << ">\n";
-
 }
 
 // Produces a string representing the test properties in a result as space
