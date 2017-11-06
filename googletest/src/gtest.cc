@@ -3501,7 +3501,6 @@ public:
     this->start_timestamp = unit_test.start_timestamp();
     this->elapsed_time = unit_test.elapsed_time();
     this->random_seed += unit_test.random_seed();
-    this->total_test_case_count += unit_test.total_test_case_count();
     this->test_result.SaveTestResult(unit_test.ad_hoc_test_result());
 
 
@@ -3514,14 +3513,13 @@ public:
             TestCaseDB *tmp = new TestCaseDB();
             tmp->SaveTestCase(*unit_test.GetTestCase(i));
             test_cases_map.insert(std::make_pair(tc->name(), tmp));
-            std::cout << "Not found"<< std::endl;
+            this->total_test_case_count++;
           }
         else
           {
             //element present
             TestCaseDB *tc_map = test_cases_map.at(tc->name());
             tc_map->SaveTestCase(*unit_test.GetTestCase(i));
-            std::cout << "Found"<< std::endl;
           }
       }
   }
