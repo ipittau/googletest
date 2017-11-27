@@ -3569,6 +3569,7 @@ public:
 
 // This class generates an XML output file.
 class XmlUnitTestResultPrinter : public EmptyTestEventListener {
+ friend class StdOutUnitTestResultPrinter;
  public:
   explicit XmlUnitTestResultPrinter(const char* output_file);
 
@@ -3692,6 +3693,22 @@ void XmlUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
   PrintXmlAllUnitTests(&stream, unit_test);
   fprintf(xmlout, "%s", StringStreamToString(&stream).c_str());
   fclose(xmlout);
+}
+
+
+class StdOutUnitTestResultPrinter : public XmlUnitTestResultPrinter {
+  using XmlUnitTestResultPrinter::XmlUnitTestResultPrinter;
+  public:
+  virtual void OnTestIterationEnd(const UnitTest& unit_test, int /*iteration*/);
+
+};
+
+
+void StdOutUnitTestResultPrinter::OnTestIterationEnd(const UnitTest& unit_test,
+                                                  int /*iteration*/) {
+  std::stringstream stream;
+  PrintXmlAllUnitTests(&stream, unit_test);
+  printf( "%s", StringStreamToString(&stream).c_str());
 }
 
 // Returns an XML-escaped copy of the input string str.  If is_attribute
@@ -4790,7 +4807,12 @@ void UnitTestImpl::ConfigureXmlOutput() {
   if (output_format == "xml") {
     listeners()->SetDefaultXmlGenerator(new XmlUnitTestResultPrinter(
         UnitTestOptions::GetAbsolutePathToOutputFile().c_str()));
-  } else if (output_format != "") {
+  }
+  else if (output_format == "stdout") {
+      listeners()->SetDefaultXmlGenerator(new StdOutUnitTestResultPrinter(
+          UnitTestOptions::GetAbsolutePathToOutputFile().c_str()));
+    }
+  else if (output_format != "") {
     GTEST_LOG_(WARNING) << "WARNING: unrecognized output format \"" 
                         << output_format 
                         << "\" ignored.";
