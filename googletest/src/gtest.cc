@@ -3491,13 +3491,13 @@ public:
     this->test_result.SaveTestResult(test_case.ad_hoc_test_result());
     this->total_test_count += test_case.total_test_count();
 
-    std::cout << "debug: " << test_case.name() << " report: " << test_case.reportable_test_count()<<std::endl;;
+    //std::cout << "debug: " << test_case.name() << " report: " << test_case.reportable_test_count()<<std::endl;;
 
     for (int i = 0; i < test_case.total_test_count(); ++i) {
       TestCaseDB tmp;
       tmp.AddTestCase(*test_case.GetTestInfo(i));
       test_info.push_back(tmp);
-      std::cout << "insert: " << tmp.name << " report: " << tmp.is_reportable << std::endl;
+      //std::cout << "insert: " << tmp.name << " report: " << tmp.is_reportable << std::endl;
     }
   }
 
@@ -3544,11 +3544,11 @@ public:
     for (int i = 0; i < unit_test.total_test_case_count(); ++i) {
       const TestCase *tc = unit_test.GetTestCase(i);
 
-      std::cout << "looking for: " << tc->name() << std::endl;
+      //std::cout << "looking for: " << tc->name() << std::endl;
       if (test_cases_map.count(tc->name()) == 0)
       {
         //element not present
-        std::cout << "not found" << std::endl;
+        //std::cout << "not found" << std::endl;
         TestSuiteDB tmp;
         tmp.AddTestSuite(*tc);
         test_cases_map.insert(std::make_pair(tc->name(), tmp));
@@ -4134,7 +4134,7 @@ void XmlUnitTestResultPrinter::PrintXmlAllUnitTests(std::ostream* stream,
     }
     else
     {
-      std::cout << "no reportable: " << tc.name << std::endl;
+      //std::cout << "no reportable: " << tc.name << std::endl;
     }
   }
 
